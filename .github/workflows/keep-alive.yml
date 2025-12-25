@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------
+# GitHub Actions – keep the Streamlit Cloud app awake
+# ---------------------------------------------------------------
+name: Keep Streamlit App Awake
+
+# Trigger the job:
+#   • Every 5 minutes (cron schedule)
+#   • Manually via the “Run workflow” button (workflow_dispatch)
+on:
+  schedule:
+    # ── every 5 minutes ────────────────────────────────────────
+    - cron: "*/5 * * * *"
+  workflow_dispatch:   # allows you to run it on demand from the UI
+
+jobs:
+  ping-streamlit:
+    runs-on: ubuntu-latest
+    steps:
+      # -----------------------------------------------------------------
+      # 1️⃣  Pull the URL of your Streamlit app from a secret
+      # -----------------------------------------------------------------
+      - name: Get Streamlit URL from secret
+        id: get_url
+        run: |
+          echo "STREAMLIT_URL=${{ secrets.STREAMLIT_URL }}" >> $GITHUB_ENV
+
+      # -----------------------------------------------------------------
+      # 2️⃣  Send a HEAD request (no body) – this is enough to wake the dyno
+      # -----------------------------------------------------------------
+      - name: Ping Streamlit app
+        run: |
+          # Use curl with a short timeout; we discard the output.
+          curl -I -s --max-time 10 "$STREAMLIT_URL" || echo "Ping failed"
+
+      # -----------------------------------------------------------------
+      # 3️⃣  (Optional) Log the HTTP status code for debugging
+      # -----------------------------------------------------------------
+      - name: Log HTTP status
+        if: always()
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$STREAMLIT_URL")
+          echo "✅ Pinged $STREAMLIT_URL – HTTP status $STATUS"

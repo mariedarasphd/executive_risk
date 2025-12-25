@@ -11,7 +11,7 @@ Executive Risk Dashboard – Streamlit app
 import pathlib
 import pandas as pd
 import streamlit as st
-from tqdm import tqdm  # optional – provides a progress bar while reading chunks
+from tqdm import tqdm   # optional – provides a progress bar while reading chunks
 
 # -----------------------------------------------------------------
 # 0️⃣  Paths & constants
@@ -68,7 +68,7 @@ else:
 # -----------------------------------------------------------------
 @st.cache_data(ttl=86_400)   # cache for 24 h (refresh daily)
 def load_data() -> pd.DataFrame:
-    """Read demo_nsfw_personal.csv in chunks, keep only needed columns."""
+    """Read demo_nsfw_personal.csv in chunks and keep only needed columns."""
     if not DATA_PATH.is_file():
         st.error(f"❌ Data file not found at `{DATA_PATH}`")
         st.stop()
@@ -101,7 +101,6 @@ def load_data() -> pd.DataFrame:
     chunks = []
 
     with st.spinner("⏳ Loading CSV in chunks…"):
-        # tqdm gives a nice progress bar in the UI
         for chunk in tqdm(
             pd.read_csv(
                 DATA_PATH,
@@ -127,9 +126,7 @@ def load_data() -> pd.DataFrame:
 
             # Convert timestamp column (if present)
             if "ts" in chunk.columns:
-                chunk["ts"] = pd.to_datetime(
-                    chunk["ts"], utc=True, errors="coerce"
-                )
+                chunk["ts"] = pd.to_datetime(chunk["ts"], utc=True, errors="coerce")
 
             chunks.append(chunk)
 
@@ -158,4 +155,155 @@ st.markdown(
     """
 )
 
-# -------------------------------------------------------
+# -----------------------------------------------------------------
+# 6️⃣  Sidebar filters
+# -----------------------------------------------------------------
+st.sidebar.header("🔧 Filters")
+
+# 6.1 Executive selector (multi‑select)
+exec_options = sorted(df["exec_id"].unique())
+selected_execs = st.sidebar.multiselect(
+    "👤 Executive(s)",
+    options=exec_options,
+    default=exec_options[:5],
+    help="Select one or more employee IDs."
+)
+
+# 6.2 Risk‑flag toggles
+show_risky_email = st.sidebar.checkbox(
+    "🚩 Show only risky e‑mail rows",
+    value=False,
+    help="Filters to rows where `risk_flag_email` is True."
+)
+
+show_nsfw_chat = st.sidebar.checkbox(
+    "🔞 Show only NSFW chat rows",
+    value=False,
+    help="Filters to rows where `flag_nsfw` is True."
+)
+
+# 6.3 Transaction category filter (if column exists)
+if "category" in df.columns:
+    cat_options = sorted(df["category"].dropna().unique())
+    selected_cats = st.sidebar.multiselect(
+        "💳 Transaction category",
+        options=cat_options,
+        default=cat_options,
+        help="Filter synthetic credit‑card transactions by category."
+    )
+else:
+    selected_cats = []   # no category column → no filtering on it
+
+# 6.4 Over‑limit toggle
+show_over_limit = st.sidebar.checkbox(
+    "⚠️ Show only over‑limit transactions",
+    value=False,
+    help="Filters to rows where `over_limit` is True."
+)
+
+# 6.5 Personal‑use toggle
+show_personal_use = st.sidebar.checkbox(
+    "🧾 Show only personal‑use transactions",
+    value=False,
+    help="Filters to rows where `personal_use` is True."
+)
+
+# -----------------------------------------------------------------
+# 7️⃣  Apply filters
+# -----------------------------------------------------------------
+filtered = df.copy()
+
+if selected_execs:
+    filtered = filtered[filtered["exec_id"].isin(selected_execs)]
+
+if show_risky_email:
+    filtered = filtered[filtered["risk_flag_email"]]
+
+if show_nsfw_chat:
+    filtered = filtered[filtered["flag_nsfw"]]
+
+if selected_cats:
+    filtered = filtered[filtered["category"].isin(selected_cats)]
+
+if show_over_limit:
+    filtered = filtered[filtered["over_limit"]]
+
+if show_personal_use:
+    filtered = filtered[filtered["personal_use"]]
+
+# -----------------------------------------------------------------
+# 8️⃣  Metrics (overview)
+# -----------------------------------------------------------------
+st.subheader("📊 Overview")
+col_a, col_b, col_c = st.columns(3)
+
+with col_a:
+    st.metric(
+        label="Total Employees",
+        value=f"{df['exec_id'].nunique():,}"
+    )
+with col_b:
+    st.metric(
+        label="Risky e‑mail execs",
+        value=f"{df['risk_flag_email'].sum():,}"
+    )
+with col_c:
+    st.metric(
+        label="NSFW chats",
+        value=f"{df['flag_nsfw'].sum():,}"
+    )
+st.markdown("---")
+
+# -----------------------------------------------------------------
+# 9️⃣  Show the filtered dataframe
+# -----------------------------------------------------------------
+st.subheader("🗂️ Filtered data")
+
+display_cols = [
+    "exec_id",
+    "email_message",
+    "email_sentiment",
+    "risk_flag_email",
+    "message",
+    "flag_nsfw",
+    "flag_fin",
+    "flag_compliance",
+    "chat_sentiment",
+    "ts",
+    "category",
+    "amt_usd",
+    "over_limit",
+    "personal_use",
+    "flag_compliance_txn",
+]
+
+st.dataframe(
+    filtered[display_cols],
+    use_container_width=True,
+    height=500,
+)
+
+# -----------------------------------------------------------------
+# 🔟  Download button – export filtered view as CSV
+# -----------------------------------------------------------------
+def convert_df_to_csv(df_: pd.DataFrame) -> bytes:
+    """Return CSV bytes for Streamlit download button."""
+    return df_.to_csv(index=False).encode("utf-8")
+
+csv_bytes = convert_df_to_csv(filtered[display_cols])
+
+st.download_button(
+    label="💾 Download filtered view as CSV",
+    data=csv_bytes,
+    file_name="filtered_executive_risk.csv",
+    mime="text/csv",
+    help="Download the rows currently displayed in the table.",
+)
+
+# -----------------------------------------------------------------
+# 🔚  Footer / disclaimer
+# -----------------------------------------------------------------
+st.caption(
+    "© 2025 Your Company – Internal risk dashboard. "
+    "Data is synthetic except for the Enron e‑mail sample."
+)

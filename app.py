@@ -32,9 +32,10 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------
-# 2️⃣  Inject Tiffany‑blue CSS (this is the ONLY line that matters)
+# 2️⃣  Inject Tiffany‑blue CSS (the **only** place we call markdown)
 # -----------------------------------------------------------------
 CUSTOM_CSS = """
+<style>
 /* ---------- Global page styling ---------- */
 body {
     background-color: #0ABAB5;   /* Tiffany blue */
@@ -58,8 +59,9 @@ footer { background-color: #0ABAB5; }
     max-height: 60px;
     margin-right: 12px;
 }
+</style>
 """
-# IMPORTANT: we actually pass the CSS string to markdown
+# IMPORTANT: we actually send the CSS to the browser
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------
@@ -305,7 +307,6 @@ with col_a:
         value=f"{df['exec_id'].nunique():,}"
     )
 with col_b:
-    # Use .get() to avoid KeyError if the column is missing
     st.metric(
         label="Risky e‑mail execs",
         value=f"{df.get('risk_flag_email', pd.Series([False])).sum():,}"

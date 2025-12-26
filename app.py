@@ -3,12 +3,13 @@
 
 """
 Executive Risk Dashboard – Streamlit app
----------------------------------------
-* Theme (Tiffany blue) and logo are defined directly in this file.
-* Data source: demo_nsfw_personal.csv (must be in the repo root).
+
+- Theme (Tiffany blue) and logo are defined directly in this file.
+- Data source: demo_nsfw_personal.csv (must be in the repo root).
 """
 
 import pathlib
+import re
 import pandas as pd
 import streamlit as st
 from tqdm import tqdm   # optional – provides a progress bar while reading chunks
@@ -50,8 +51,11 @@ footer { background-color: #0ABAB5; }
 
 /* Logo image sizing (used in the sidebar) */
 .logo-img { max-height: 60px; margin-right: 12px; }
+
+/* Extra top padding so the title isn’t cut off */
+.main { padding-top: 40px; }
 """
-st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------
 # 3️⃣  Show the logo in the sidebar
@@ -69,7 +73,7 @@ else:
 @st.cache_data(ttl=86_400)   # cache for 24 h (refresh daily)
 def load_data() -> pd.DataFrame:
     """Read demo_nsfw_personal.csv in chunks, keep only needed columns,
-       and add any missing columns with safe default values."""
+    add any missing columns with safe defaults, and create masked text columns."""
     if not DATA_PATH.is_file():
         st.error(f"❌ Data file not found at `{DATA_PATH}`")
         st.stop()
@@ -107,7 +111,7 @@ def load_data() -> pd.DataFrame:
                 DATA_PATH,
                 engine="python",
                 encoding="utf-8",
-                usecols=lambda c: c in needed_cols,   # keep only needed columns
+                usecols=lambda c: c in needed_cols,
                 chunksize=CHUNK_SIZE,
             ),
             desc="Reading CSV",
@@ -155,17 +159,34 @@ def load_data() -> pd.DataFrame:
             "personal_use",
             "flag_compliance_txn",
         }:
-            # Boolean columns → default False
-            df[col] = False
+            df[col] = False                     # Boolean columns → default False
         elif col in {"email_sentiment", "chat_sentiment"}:
-            # Sentiment scores → default 0.0 (neutral)
-            df[col] = 0.0
+            df[col] = 0.0                       # Sentiment scores → neutral
         else:
-            # All other missing columns → empty string (or 0 for numeric)
-            if col in {"amt_usd"}:
+            if col == "amt_usd":
                 df[col] = 0.0
             else:
                 df[col] = ""
+
+    # -------------------------------------------------
+    # ---------- PROFANITY MASKING ----------
+    # -------------------------------------------------
+    def mask_profanity(text: str) -> str:
+        """Replace a short list of profane words with asterisks."""
+        profanity_words = [
+            "fuck", "shit", "shitty", "cunt", "bitch",
+            "ass", "damn", "crap", "piss", "dick"
+        ]
+        pattern = re.compile(r"\b(" + "|".join(profanity_words) + r")\b", flags=re.I)
+
+        def _replace(m):
+            return "*" * len(m.group())
+
+        return pattern.sub(_replace, text)
+
+    # Create masked copies – keep originals for export if needed
+    df["email_message_masked"] = df["email_message"].astype(str).apply(mask_profanity)
+    df["message_masked"]       = df["message"].astype(str).apply(mask_profanity)
 
     # -------------------------------------------------
     # Success message in the sidebar
@@ -174,7 +195,10 @@ def load_data() -> pd.DataFrame:
     print(f"[INFO] CSV loaded – rows: {len(df):,}, cols: {len(df.columns)}")
     return df.copy()
 
+
+# -----------------------------------------------------------------
 # Load the data (cached)
+# -----------------------------------------------------------------
 df = load_data()
 
 # -----------------------------------------------------------------
@@ -183,9 +207,8 @@ df = load_data()
 st.title("🔎 Executive Risk Dashboard")
 st.markdown(
     """
-    A lightweight demo that joins **customer remarks**, **sentiment analysis**, 
-    and **synthetic transaction data**, then highlights high‑value, 
-    negative‑sentiment cases.
+    A lightweight demo that joins **customer remarks**, **sentiment analysis**, and **synthetic transaction data**, 
+    then highlights high‑value, negative‑sentiment cases.
     """
 )
 
@@ -296,10 +319,10 @@ st.subheader("🗂️ Filtered data")
 
 display_cols = [
     "exec_id",
-    "email_message",
+    "email_message_masked",   # ← masked version
     "email_sentiment",
     "risk_flag_email",
-    "message",
+    "message_masked",         # ← masked version
     "flag_nsfw",
     "flag_fin",
     "flag_compliance",

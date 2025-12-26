@@ -32,7 +32,7 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------
-# 2️⃣  Inject Tiffany‑blue CSS (no config.toml needed)
+# 2️⃣  Inject Tiffany‑blue CSS (this is the ONLY line that matters)
 # -----------------------------------------------------------------
 CUSTOM_CSS = """
 /* ---------- Global page styling ---------- */
@@ -59,6 +59,7 @@ footer { background-color: #0ABAB5; }
     margin-right: 12px;
 }
 """
+# IMPORTANT: we actually pass the CSS string to markdown
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------

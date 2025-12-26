@@ -35,25 +35,29 @@ st.set_page_config(
 # 2️⃣  Inject Tiffany‑blue CSS (no config.toml needed)
 # -----------------------------------------------------------------
 CUSTOM_CSS = """
-/* Global page styling */
+/* ---------- Global page styling ---------- */
 body {
     background-color: #0ABAB5;   /* Tiffany blue */
     color: #ffffff;              /* White text */
 }
 
-/* Sidebar, header & footer */
+/* ---------- Sidebar, header & footer ---------- */
 [data-testid="stSidebar"] { background-color: #0ABAB5; }
 section[data-testid="stHeader"] { background-color: #0ABAB5; }
 footer { background-color: #0ABAB5; }
 
-/* Reduce vertical padding */
-.block-container { padding-top: 0rem; padding-bottom: 0rem; }
+/* ---------- Reduce vertical padding & add top space ---------- */
+/* .block-container wraps the whole page content */
+.block-container {
+    padding-top: 40px;   /* push the title down so it isn’t cut off */
+    padding-bottom: 0rem;
+}
 
-/* Logo image sizing (used in the sidebar) */
-.logo-img { max-height: 60px; margin-right: 12px; }
-
-/* Extra top padding so the title isn’t cut off */
-.main { padding-top: 40px; }
+/* ---------- Logo image sizing (used in the sidebar) ---------- */
+.logo-img {
+    max-height: 60px;
+    margin-right: 12px;
+}
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
@@ -184,7 +188,7 @@ def load_data() -> pd.DataFrame:
 
         return pattern.sub(_replace, text)
 
-    # Create masked copies – keep originals for export if needed
+    # Create masked copies – keep originals for export if needed later
     df["email_message_masked"] = df["email_message"].astype(str).apply(mask_profanity)
     df["message_masked"]       = df["message"].astype(str).apply(mask_profanity)
 
@@ -319,10 +323,10 @@ st.subheader("🗂️ Filtered data")
 
 display_cols = [
     "exec_id",
-    "email_message_masked",   # ← masked version
+    "email_message_masked",   # masked version
     "email_sentiment",
     "risk_flag_email",
-    "message_masked",         # ← masked version
+    "message_masked",         # masked version
     "flag_nsfw",
     "flag_fin",
     "flag_compliance",

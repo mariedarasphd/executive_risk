@@ -1,19 +1,29 @@
+# --------------------------------------------------------------
+# app.py – Executive Risk Dashboard (with safe header spacing)
+# --------------------------------------------------------------
+
 import streamlit as st
 import pandas as pd
 import re
 
 # ------------------------------------------------------------------
-# 1️⃣  Tiny CSS block – adds top padding/margin for the whole page
+# 1️⃣  Page configuration – MUST be the FIRST Streamlit call!
 # ------------------------------------------------------------------
-# Streamlit lets us inject raw HTML/CSS via st.markdown(..., unsafe_allow_html=True).
-# The selector ".main" targets the main content area.
-# Adjust the pixel value (e.g., 30px, 50px) to get the amount of space you like.
+st.set_page_config(
+    page_title="Executive Risk Dashboard",
+    layout="wide"
+)
+
 # ------------------------------------------------------------------
+# 2️⃣  Small CSS block – adds vertical space above the title/header
+# ------------------------------------------------------------------
+# The selector ".main" targets the main content area of a Streamlit page.
+# Adjust the pixel value if you need more/less space.
 st.markdown(
     """
     <style>
     .main {
-        padding-top: 40px;      /* space above everything */
+        padding-top: 40px;   /* space above everything */
     }
     </style>
     """,
@@ -21,9 +31,10 @@ st.markdown(
 )
 
 # ------------------------------------------------------------------
-# 2️⃣  Helper: simple profanity masker (replace with a library if you wish)
+# 3️⃣  Helper: very simple profanity masker
 # ------------------------------------------------------------------
 def mask_profanity(text: str) -> str:
+    """Replace known profanity words with asterisks."""
     profanity_words = [
         "fuck", "shit", "shitty", "cunt", "bitch",
         "ass", "damn", "crap", "piss", "dick"
@@ -37,8 +48,9 @@ def mask_profanity(text: str) -> str:
 
 
 # ------------------------------------------------------------------
-# 3️⃣  Sample data – replace with your real data source
+# 4️⃣  Load / build your data
 # ------------------------------------------------------------------
+# Replace this placeholder list with your real data source
 sample_messages = [
     "My question still stands. What the fuck is that?",
     "There is loads of tea in my house but I hate it",
@@ -52,23 +64,20 @@ df_raw["masked_message"] = df_raw["message"].apply(mask_profanity)
 
 
 # ------------------------------------------------------------------
-# 4️⃣  Streamlit page configuration & title
+# 5️⃣  Page title (now fully visible thanks to the CSS padding)
 # ------------------------------------------------------------------
-st.set_page_config(page_title="Executive Risk Dashboard", layout="wide")
 st.title("🚦 Executive Risk Dashboard – NSFW / Harassment Monitor")
 
-
 # ------------------------------------------------------------------
-# 5️⃣  Sidebar controls
+# 6️⃣  Sidebar controls
 # ------------------------------------------------------------------
 st.sidebar.header("Filters")
 show_raw = st.sidebar.checkbox(
     "Show raw messages (requires authorization)", value=False
 )
 
-
 # ------------------------------------------------------------------
-# 6️⃣  Main table – masked vs. raw
+# 7️⃣  Main table – either masked or raw depending on the toggle
 # ------------------------------------------------------------------
 if show_raw:
     st.subheader("🔎 Messages – RAW (un‑masked)")
@@ -77,13 +86,12 @@ else:
     st.subheader("🔎 Messages – Masked")
     st.dataframe(df_raw[["masked_message"]])
 
-
 # ------------------------------------------------------------------
-# 7️⃣  CSV export (full dataset)
+# 8️⃣  CSV export (full dataset, both columns)
 # ------------------------------------------------------------------
 def convert_df_to_csv(dataframe: pd.DataFrame) -> bytes:
+    """Return CSV bytes for the download button."""
     return dataframe.to_csv(index=False).encode("utf-8")
-
 
 csv_bytes = convert_df_to_csv(df_raw)
 
@@ -94,9 +102,8 @@ st.download_button(
     mime="text/csv",
 )
 
-
 # ------------------------------------------------------------------
-# 8️⃣  Optional per‑row “Show raw” expander
+# 9️⃣  Optional per‑row “Show raw” expander
 # ------------------------------------------------------------------
 st.subheader("🗂 Detailed view")
 for idx, row in df_raw.iterrows():

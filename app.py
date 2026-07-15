@@ -1,62 +1,55 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Executive Risk Dashboard – Absolute Minimal Version
+Pre-flight Environment Check
 """
 
+import sys
+
+print("=" * 50)
+print("ENVIRONMENT DIAGNOSTIC")
+print("=" * 50)
+
+# Check numpy version
+try:
+    import numpy as np
+    print(f"✓ NumPy version: {np.__version__}")
+    if np.__version__.startswith("2."):
+        print("⚠️ WARNING: NumPy 2.x detected! This causes segfaults.")
+        print("Need numpy==1.26.4 in requirements.txt")
+    else:
+        print("✓ NumPy version is 1.x (stable)")
+except Exception as e:
+    print(f"✗ NumPy import failed: {e}")
+    sys.exit(1)
+
+# Check pandas version
+try:
+    import pandas as pd
+    print(f"✓ Pandas version: {pd.__version__}")
+except Exception as e:
+    print(f"✗ Pandas import failed: {e}")
+    sys.exit(1)
+
+# Check file exists
 import pathlib
-import streamlit as st
-import pandas as pd
+DATA_PATH = pathlib.Path(__file__).parent / "demo_nsfw_personal.csv"
+print(f"\nFile exists: {DATA_PATH.exists()}")
+if DATA_PATH.exists():
+    print(f"File size: {DATA_PATH.stat().st_size / 1024:.2f} KB")
+else:
+    print("⚠️ FILE NOT FOUND - Check your path!")
+    sys.exit(1)
 
-# Paths
-ROOT_DIR = pathlib.Path(__file__).parent
-DATA_PATH = ROOT_DIR / "demo_nsfw_personal.csv"
-LOGO_PATH = ROOT_DIR / "logo.png"
-
-# Page Config
-st.set_page_config(page_title="Dashboard", page_icon="🔍", layout="wide")
-
-# CSS
-st.markdown("<style>body{background:#0ABAB5;color:#fff}.stDataFrame{overflow-x:auto}</style>", unsafe_allow_html=True)
-
-# Logo
-if LOGO_PATH.is_file():
-    st.sidebar.image(str(LOGO_PATH), width=120)
-
-# Load Data - NO CACHE, SIMPLE READ
+# Try reading CSV
 try:
-    df = pd.read_csv(DATA_PATH, encoding="utf-8")
-    st.sidebar.success(f"✅ Loaded {len(df):,} rows, {len(df.columns)} columns")
+    df = pd.read_csv(DATA_PATH, nrows=5)  # Just read first 5 rows
+    print(f"✓ CSV read successful: {len(df)} rows, {len(df.columns)} columns")
+    print(f"Columns: {df.columns.tolist()}")
 except Exception as e:
-    st.error(f"❌ Failed to load: {e}")
-    st.stop()
+    print(f"✗ CSV read failed: {e}")
+    sys.exit(1)
 
-# Show available columns
-st.title("🔎 Executive Risk Dashboard")
-st.write(f"**Columns ({len(df.columns)}):** {', '.join(df.columns.tolist())}")
-
-st.markdown("---")
-
-# Simple metrics
-col_a, col_b = st.columns(2)
-with col_a:
-    st.metric("Total Rows", f"{len(df):,}")
-with col_b:
-    if "exec_id" in df.columns:
-        st.metric("Unique Executives", f"{df['exec_id'].nunique():,}")
-
-st.markdown("---")
-
-# Show ALL data with scrollbar
-st.subheader("🗂️ Data View")
-try:
-    st.dataframe(df, use_container_width=True, height=400)
-    st.success("Table rendered successfully!")
-except Exception as e:
-    st.error(f"❌ Table failed: {e}")
-    st.write(df.head().to_html())  # Fallback HTML display
-
-# Download
-csv_bytes = df.to_csv(index=False).encode("utf-8")
-st.download_button("💾 Download CSV", data=csv_bytes, file_name="data.csv", mime="text/csv")
-
+print("\n" + "=" * 50)
+print("ALL CHECKS PASSED - Safe to run Streamlit")
+print("=" * 50)

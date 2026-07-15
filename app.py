@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Executive Risk Dashboard – With Vectorized Profanity Masking
+Executive Risk Dashboard – With All Columns Visible
 """
 
 import pathlib
@@ -17,11 +17,11 @@ LOGO_PATH = ROOT_DIR / "logo.png"
 st.set_page_config(
     page_title="Executive Risk Dashboard",
     page_icon="🔍",
-    layout="wide",
+    layout="wide",  # Important for wide tables!
     initial_sidebar_state="expanded",
 )
 
-# CSS
+# CSS - Allow horizontal scrolling
 st.markdown("""
 <style>
 body { background-color: #0ABAB5; color: #ffffff; }
@@ -29,6 +29,7 @@ body { background-color: #0ABAB5; color: #ffffff; }
 section[data-testid="stHeader"] { background-color: #0ABAB5; }
 footer { background-color: #0ABAB5; }
 .block-container { padding-top: 40px; }
+.stDataFrame { overflow-x: auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -59,7 +60,6 @@ def load_data() -> pd.DataFrame:
     # ===== PROFANITY MASKING USING VECTORIZED OPERATIONS =====
     profanity_words = ["fuck", "shit", "shitty", "cunt", "bitch", "ass", "damn", "crap", "piss", "dick"]
 
-    # Vectorized masking - converts to lowercase, replaces word-by-word
     df["email_message_masked"] = df["email_message"].astype(str).str.lower()
     df["message_masked"] = df["message"].astype(str).str.lower()
 
@@ -73,6 +73,7 @@ def load_data() -> pd.DataFrame:
     df["message_masked"] = df["message_masked"].str[:500].apply(lambda x: x + "..." if len(x) == 500 else x)
 
     st.sidebar.success(f"✅ Loaded {len(df):,} rows")
+    print(f"[DEBUG] Columns in DataFrame: {df.columns.tolist()}")
     return df.copy()
 
 df = load_data()
@@ -111,11 +112,24 @@ with col_b:
 with col_c:
     val = f"{int(df['over_limit'].sum()):,}" if "over_limit" in df.columns else "N/A"
     st.metric(label="Over Limit", value=val)
+
 st.markdown("---")
 
-# Display Table
+# Debug: Show available columns
+st.subheader("🔧 Available Columns")
+st.write(f"**{len(filtered.columns)} columns:** {filtered.columns.tolist()}")
+
+st.markdown("---")
+
+# Display Table - Force ALL columns
 st.subheader("🗂️ Filtered Data")
-st.dataframe(filtered, use_container_width=True, height=500, hide_index=True)
+
+# IMPORTANT: Use ALL columns, don't subset
+st.dataframe(
+    filtered,
+    use_container_width=True,  # This expands to full width
+    height=600,  # More room for scrolling
+)
 
 # Download
 csv_bytes = filtered.to_csv(index=False).encode("utf-8")

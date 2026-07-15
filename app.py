@@ -50,7 +50,7 @@ footer { background-color: #0ABAB5; }
 /* ---------- Reduce vertical padding & add top space ---------- */
 /* .block-container wraps the whole page content */
 .block-container {
-    padding-top: 40px;   /* push the title down so it isn't cut off */
+    padding-top: 40px;   /* push the title down so it isn’t cut off */
     padding-bottom: 0rem;
 }
 
@@ -77,7 +77,7 @@ else:
 # -----------------------------------------------------------------
 # 4️⃣  Load the CSV (cached – runs only once per session)
 # -----------------------------------------------------------------
-@st.cache_data(ttl=86_400)   # cache for 24 h (refresh daily)
+@st.cache_data(ttl=86_400)   # cache for 24 h (refresh daily)
 def load_data() -> pd.DataFrame:
     """Read demo_nsfw_personal.csv in chunks, keep only needed columns,
     add any missing columns with safe defaults, and create masked text columns."""
@@ -107,7 +107,7 @@ def load_data() -> pd.DataFrame:
     ]
 
     # -------------------------------------------------
-    # Chunked read – 200 k rows per chunk (adjust if you wish)
+    # Chunked read – 200 k rows per chunk (adjust if you wish)
     # -------------------------------------------------
     CHUNK_SIZE = 200_000
     chunks = []
@@ -229,7 +229,7 @@ exec_options = sorted(df["exec_id"].unique())
 selected_execs = st.sidebar.multiselect(
     "👤 Executive(s)",
     options=exec_options,
-    default=[],  # FIX 1: Changed from exec_options[:5] to empty list
+    default=exec_options[:5],
     help="Select one or more employee IDs."
 )
 
@@ -252,7 +252,7 @@ if "category" in df.columns:
     selected_cats = st.sidebar.multiselect(
         "💳 Transaction category",
         options=cat_options,
-        default=[],  # FIX 1: Changed from cat_options to empty list
+        default=cat_options,
         help="Filter synthetic credit‑card transactions by category."
     )
 else:

@@ -58,11 +58,6 @@ footer { background-color: #0ABAB5; }
     max-height: 60px;
     margin-right: 12px;
 }
-
-/* ---------- Table scrolling fix ---------- */
-.stDataFrame {
-    overflow-x: auto;
-}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -86,6 +81,7 @@ def load_data() -> pd.DataFrame:
         st.error(f"❌ Data file not found at `{DATA_PATH}`")
         st.stop()
 
+    # ALL columns we want to track (will fill missing ones later)
     needed_cols = [
         "exec_id",
         "email_message",
@@ -137,8 +133,8 @@ def load_data() -> pd.DataFrame:
 
     df = pd.concat(chunks, ignore_index=True)
 
+    # Add any missing columns with safe defaults
     missing = set(needed_cols) - set(df.columns)
-
     for col in missing:
         if col in {
             "risk_flag_email",
@@ -166,21 +162,20 @@ def load_data() -> pd.DataFrame:
             "ass", "damn", "crap", "piss", "dick"
         ]
         pattern = re.compile(r"\b(" + "|".join(profanity_words) + r")\b", flags=re.I)
-
         def _replace(m):
             return "*" * len(m.group())
-
         return pattern.sub(_replace, text)
 
     df["email_message_masked"] = df["email_message"].astype(str).apply(mask_profanity)
     df["message_masked"]       = df["message"].astype(str).apply(mask_profanity)
 
-    # Truncate long text columns for display (keeps full data in CSV export)
+    # Truncate long text columns for display
     df["email_message_masked"] = df["email_message_masked"].apply(lambda x: x[:500] + "..." if len(x) > 500 else x)
     df["message_masked"]       = df["message_masked"].apply(lambda x: x[:500] + "..." if len(x) > 500 else x)
 
     st.sidebar.success(f"✅ Loaded {len(df):,} rows")
     print(f"[INFO] CSV loaded – rows: {len(df):,}, cols: {len(df.columns)}")
+    print(f"[DEBUG] Columns available: {df.columns.tolist()}")
     return df.copy()
 
 
@@ -210,15 +205,8 @@ selected_execs = st.sidebar.multiselect(
     help="Select one or more employee IDs."
 )
 
-show_risky_email = st.sidebar.checkbox(
-    "🚩 Show only risky e‑mail rows",
-    value=False,
-)
-
-show_nsfw_chat = st.sidebar.checkbox(
-    "🔞 Show only NSFW chat rows",
-    value=False,
-)
+show_risky_email = st.sidebar.checkbox("🚩 Show only risky e‑mail rows", value=False)
+show_nsfw_chat = st.sidebar.checkbox("🔞 Show only NSFW chat rows", value=False)
 
 if "category" in df.columns:
     cat_options = sorted(df["category"].dropna().unique())
@@ -231,15 +219,8 @@ if "category" in df.columns:
 else:
     selected_cats = []
 
-show_over_limit = st.sidebar.checkbox(
-    "⚠️ Show only over‑limit transactions",
-    value=False,
-)
-
-show_personal_use = st.sidebar.checkbox(
-    "🧾 Show only personal‑use transactions",
-    value=False,
-)
+show_over_limit = st.sidebar.checkbox("⚠️ Show only over‑limit transactions", value=False)
+show_personal_use = st.sidebar.checkbox("🧾 Show only personal‑use transactions", value=False)
 
 # -----------------------------------------------------------------
 # 7️⃣  Apply filters
@@ -248,19 +229,14 @@ filtered = df.copy()
 
 if selected_execs:
     filtered = filtered[filtered["exec_id"].isin(selected_execs)]
-
 if show_risky_email:
     filtered = filtered[filtered["risk_flag_email"]]
-
 if show_nsfw_chat:
     filtered = filtered[filtered["flag_nsfw"]]
-
-if selected_cats:
+if selected_cats and "category" in filtered.columns:
     filtered = filtered[filtered["category"].isin(selected_cats)]
-
 if show_over_limit:
     filtered = filtered[filtered["over_limit"]]
-
 if show_personal_use:
     filtered = filtered[filtered["personal_use"]]
 
@@ -269,7 +245,6 @@ if show_personal_use:
 # -----------------------------------------------------------------
 st.subheader("📊 Overview")
 col_a, col_b, col_c = st.columns(3)
-
 with col_a:
     st.metric(label="Total Employees", value=f"{df['exec_id'].nunique():,}")
 with col_b:
@@ -279,50 +254,48 @@ with col_c:
 st.markdown("---")
 
 # -----------------------------------------------------------------
-# 9️⃣  Show the filtered dataframe (improved column display)
+# 9️⃣  DEBUG: Show what columns exist
+# -----------------------------------------------------------------
+st.subheader("🔧 Debug Info")
+st.write(f"**Filtered rows:** {len(filtered)}")
+st.write(f"**Available columns:** {filtered.columns.tolist()}")
+
+# -----------------------------------------------------------------
+# 🔟  Show the filtered dataframe (ALL columns)
 # -----------------------------------------------------------------
 st.subheader("🗂️ Filtered data")
 
-# Group columns for better organization
-tab1, tab2 = st.tabs(["📧 Communications", "💳 Transactions"])
-
-with tab1:
-    comm_cols = [
+# Build display columns dynamically based on what exists
+available_display_cols = [
+    col for col in [
         "exec_id",
         "email_message_masked",
         "email_sentiment",
         "risk_flag_email",
         "message_masked",
         "flag_nsfw",
-        "chat_sentiment",
-        "ts",
-    ]
-    
-    display_comm = filtered[comm_cols].copy()
-    for col in display_comm.columns:
-        if display_comm[col].dtype == 'object':
-            display_comm[col] = display_comm[col].fillna('')
-    
-    st.dataframe(display_comm, use_container_width=True, height=400, hide_index=True)
-
-with tab2:
-    txn_cols = [
-        "exec_id",
         "flag_fin",
         "flag_compliance",
+        "chat_sentiment",
+        "ts",
         "category",
         "amt_usd",
         "over_limit",
         "personal_use",
         "flag_compliance_txn",
     ]
-    
-    display_txn = filtered[txn_cols].copy()
-    for col in display_txn.columns:
-        if display_txn[col].dtype == 'object':
-            display_txn[col] = display_txn[col].fillna('')
-    
-    st.dataframe(display_txn, use_container_width=True, height=400, hide_index=True)
+    if col in filtered.columns
+]
+
+print(f"[DEBUG] Display columns: {available_display_cols}")
+
+display_df = filtered[available_display_cols].copy()
+
+for col in display_df.columns:
+    if display_df[col].dtype == 'object':
+        display_df[col] = display_df[col].fillna('')
+
+st.dataframe(display_df, use_container_width=True, height=500, hide_index=True)
 
 # -----------------------------------------------------------------
 # 🔟  Download button

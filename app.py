@@ -48,27 +48,30 @@ section[data-testid="stHeader"] { background-color: #0ABAB5; }
 footer { background-color: #0ABAB5; }
 
 /* ---------- Reduce vertical padding & add top space ---------- */
-/* .block-container wraps the whole page content */
 .block-container {
-    padding-top: 40px;   /* push the title down so it isn’t cut off */
+    padding-top: 40px;
     padding-bottom: 0rem;
 }
 
-/* ---------- Logo image sizing (used in the sidebar) ---------- */
+/* ---------- Logo image sizing ---------- */
 .logo-img {
     max-height: 60px;
     margin-right: 12px;
 }
+
+/* ---------- Table scrolling fix ---------- */
+.stDataFrame {
+    overflow-x: auto;
+}
 </style>
 """
-# IMPORTANT: we actually send the CSS to the browser
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------
 # 3️⃣  Show the logo in the sidebar
 # -----------------------------------------------------------------
 if LOGO_PATH.is_file():
-    st.sidebar.image(str(LOGO_PATH), width=120)   # adjust width if you like
+    st.sidebar.image(str(LOGO_PATH), width=120)
 else:
     st.sidebar.warning(
         "⚠️ logo.png not found – please add it to the repository root."
@@ -77,17 +80,12 @@ else:
 # -----------------------------------------------------------------
 # 4️⃣  Load the CSV (cached – runs only once per session)
 # -----------------------------------------------------------------
-@st.cache_data(ttl=86_400)   # cache for 24 h (refresh daily)
+@st.cache_data(ttl=86_400)
 def load_data() -> pd.DataFrame:
-    """Read demo_nsfw_personal.csv in chunks, keep only needed columns,
-    add any missing columns with safe defaults, and create masked text columns."""
     if not DATA_PATH.is_file():
         st.error(f"❌ Data file not found at `{DATA_PATH}`")
         st.stop()
 
-    # -------------------------------------------------
-    # Columns we actually need for the dashboard
-    # -------------------------------------------------
     needed_cols = [
         "exec_id",
         "email_message",
@@ -106,9 +104,6 @@ def load_data() -> pd.DataFrame:
         "flag_compliance_txn",
     ]
 
-    # -------------------------------------------------
-    # Chunked read – 200 k rows per chunk (adjust if you wish)
-    # -------------------------------------------------
     CHUNK_SIZE = 200_000
     chunks = []
 
@@ -123,9 +118,6 @@ def load_data() -> pd.DataFrame:
             ),
             desc="Reading CSV",
         ):
-            # -------------------------------------------------
-            # Cast known boolean columns (if they exist in this chunk)
-            # -------------------------------------------------
             for col in [
                 "risk_flag_email",
                 "flag_nsfw",
@@ -138,22 +130,13 @@ def load_data() -> pd.DataFrame:
                 if col in chunk.columns:
                     chunk[col] = chunk[col].astype(bool)
 
-            # -------------------------------------------------
-            # Convert timestamp column (if present)
-            # -------------------------------------------------
             if "ts" in chunk.columns:
                 chunk["ts"] = pd.to_datetime(chunk["ts"], utc=True, errors="coerce")
 
             chunks.append(chunk)
 
-    # -------------------------------------------------
-    # Concatenate all chunks into a single DataFrame
-    # -------------------------------------------------
     df = pd.concat(chunks, ignore_index=True)
 
-    # -------------------------------------------------
-    # Add any missing columns with safe defaults
-    # -------------------------------------------------
     missing = set(needed_cols) - set(df.columns)
 
     for col in missing:
@@ -166,20 +149,18 @@ def load_data() -> pd.DataFrame:
             "personal_use",
             "flag_compliance_txn",
         }:
-            df[col] = False                     # Boolean columns → default False
+            df[col] = False
         elif col in {"email_sentiment", "chat_sentiment"}:
-            df[col] = 0.0                       # Sentiment scores → neutral
+            df[col] = 0.0
         else:
             if col == "amt_usd":
                 df[col] = 0.0
             else:
                 df[col] = ""
 
-    # -------------------------------------------------
-    # ---------- PROFANITY MASKING ----------
-    # -------------------------------------------------
     def mask_profanity(text: str) -> str:
-        """Replace a short list of profane words with asterisks."""
+        if not isinstance(text, str):
+            return ""
         profanity_words = [
             "fuck", "shit", "shitty", "cunt", "bitch",
             "ass", "damn", "crap", "piss", "dick"
@@ -191,21 +172,18 @@ def load_data() -> pd.DataFrame:
 
         return pattern.sub(_replace, text)
 
-    # Create masked copies – keep originals for export if needed later
     df["email_message_masked"] = df["email_message"].astype(str).apply(mask_profanity)
     df["message_masked"]       = df["message"].astype(str).apply(mask_profanity)
 
-    # -------------------------------------------------
-    # Success message in the sidebar
-    # -------------------------------------------------
+    # Truncate long text columns for display (keeps full data in CSV export)
+    df["email_message_masked"] = df["email_message_masked"].apply(lambda x: x[:500] + "..." if len(x) > 500 else x)
+    df["message_masked"]       = df["message_masked"].apply(lambda x: x[:500] + "..." if len(x) > 500 else x)
+
     st.sidebar.success(f"✅ Loaded {len(df):,} rows")
     print(f"[INFO] CSV loaded – rows: {len(df):,}, cols: {len(df.columns)}")
     return df.copy()
 
 
-# -----------------------------------------------------------------
-# Load the data (cached)
-# -----------------------------------------------------------------
 df = load_data()
 
 # -----------------------------------------------------------------
@@ -224,52 +202,43 @@ st.markdown(
 # -----------------------------------------------------------------
 st.sidebar.header("🔧 Filters")
 
-# 6.1 Executive selector (multi‑select)
 exec_options = sorted(df["exec_id"].unique())
 selected_execs = st.sidebar.multiselect(
     "👤 Executive(s)",
     options=exec_options,
-    default=exec_options[:5],
+    default=[],
     help="Select one or more employee IDs."
 )
 
-# 6.2 Risk‑flag toggles
 show_risky_email = st.sidebar.checkbox(
     "🚩 Show only risky e‑mail rows",
     value=False,
-    help="Filters to rows where `risk_flag_email` is True."
 )
 
 show_nsfw_chat = st.sidebar.checkbox(
     "🔞 Show only NSFW chat rows",
     value=False,
-    help="Filters to rows where `flag_nsfw` is True."
 )
 
-# 6.3 Transaction category filter (if column exists)
 if "category" in df.columns:
     cat_options = sorted(df["category"].dropna().unique())
     selected_cats = st.sidebar.multiselect(
         "💳 Transaction category",
         options=cat_options,
-        default=cat_options,
+        default=[],
         help="Filter synthetic credit‑card transactions by category."
     )
 else:
-    selected_cats = []   # no category column → no filtering on it
+    selected_cats = []
 
-# 6.4 Over‑limit toggle
 show_over_limit = st.sidebar.checkbox(
     "⚠️ Show only over‑limit transactions",
     value=False,
-    help="Filters to rows where `over_limit` is True."
 )
 
-# 6.5 Personal‑use toggle
 show_personal_use = st.sidebar.checkbox(
     "🧾 Show only personal‑use transactions",
     value=False,
-    help="Filters to rows where `personal_use` is True."
 )
 
 # -----------------------------------------------------------------
@@ -302,70 +271,76 @@ st.subheader("📊 Overview")
 col_a, col_b, col_c = st.columns(3)
 
 with col_a:
-    st.metric(
-        label="Total Employees",
-        value=f"{df['exec_id'].nunique():,}"
-    )
+    st.metric(label="Total Employees", value=f"{df['exec_id'].nunique():,}")
 with col_b:
-    st.metric(
-        label="Risky e‑mail execs",
-        value=f"{df.get('risk_flag_email', pd.Series([False])).sum():,}"
-    )
+    st.metric(label="Risky e‑mail execs", value=f"{df.get('risk_flag_email', pd.Series([False])).sum():,}")
 with col_c:
-    st.metric(
-        label="NSFW chats",
-        value=f"{df.get('flag_nsfw', pd.Series([False])).sum():,}"
-    )
+    st.metric(label="NSFW chats", value=f"{df.get('flag_nsfw', pd.Series([False])).sum():,}")
 st.markdown("---")
 
 # -----------------------------------------------------------------
-# 9️⃣  Show the filtered dataframe
+# 9️⃣  Show the filtered dataframe (improved column display)
 # -----------------------------------------------------------------
 st.subheader("🗂️ Filtered data")
 
-display_cols = [
-    "exec_id",
-    "email_message_masked",   # masked version
-    "email_sentiment",
-    "risk_flag_email",
-    "message_masked",         # masked version
-    "flag_nsfw",
-    "flag_fin",
-    "flag_compliance",
-    "chat_sentiment",
-    "ts",
-    "category",
-    "amt_usd",
-    "over_limit",
-    "personal_use",
-    "flag_compliance_txn",
-]
+# Group columns for better organization
+tab1, tab2 = st.tabs(["📧 Communications", "💳 Transactions"])
 
-st.dataframe(
-    filtered[display_cols],
-    use_container_width=True,
-    height=500,
-)
+with tab1:
+    comm_cols = [
+        "exec_id",
+        "email_message_masked",
+        "email_sentiment",
+        "risk_flag_email",
+        "message_masked",
+        "flag_nsfw",
+        "chat_sentiment",
+        "ts",
+    ]
+    
+    display_comm = filtered[comm_cols].copy()
+    for col in display_comm.columns:
+        if display_comm[col].dtype == 'object':
+            display_comm[col] = display_comm[col].fillna('')
+    
+    st.dataframe(display_comm, use_container_width=True, height=400, hide_index=True)
+
+with tab2:
+    txn_cols = [
+        "exec_id",
+        "flag_fin",
+        "flag_compliance",
+        "category",
+        "amt_usd",
+        "over_limit",
+        "personal_use",
+        "flag_compliance_txn",
+    ]
+    
+    display_txn = filtered[txn_cols].copy()
+    for col in display_txn.columns:
+        if display_txn[col].dtype == 'object':
+            display_txn[col] = display_txn[col].fillna('')
+    
+    st.dataframe(display_txn, use_container_width=True, height=400, hide_index=True)
 
 # -----------------------------------------------------------------
-# 🔟  Download button – export filtered view as CSV
+# 🔟  Download button
 # -----------------------------------------------------------------
 def convert_df_to_csv(df_: pd.DataFrame) -> bytes:
-    """Return CSV bytes for Streamlit download button."""
     return df_.to_csv(index=False).encode("utf-8")
 
-csv_bytes = convert_df_to_csv(filtered[display_cols])
+csv_bytes = convert_df_to_csv(filtered)
 
 st.download_button(
-    label="💾 Download filtered view as CSV",
+    label="💾 Download all filtered data as CSV",
     data=csv_bytes,
     file_name="filtered_executive_risk.csv",
     mime="text/csv",
-    help="Download the rows currently displayed in the table.",
 )
 
 # -----------------------------------------------------------------
-# 🔚  Footer / disclaimer
+# 🔚  Footer
 # -----------------------------------------------------------------
 st.caption(
     "© 2025 Your Company – Internal risk dashboard. "
